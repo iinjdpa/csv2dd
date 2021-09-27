@@ -1,0 +1,155 @@
+# coding: utf-8
+
+__Name__ = 'csv2dd'
+__Comment__ = '''
+Create dynamicData objects in FreeCAD from csv file.
+It allows create several dynamicData objects in one click containing multiple variables per object
+and naming the dynamicData objects different that "dd".
+'''
+__Author__ = "Daniel Pose. iinjdpa at gmail"
+__Version__ = '0.1'
+__Date__ = '2021-09-26'
+__License__ = 'MIT'
+__Web__ = ""
+__Wiki__ = ""
+__Icon__ = ''
+__Help__ = ''
+__Status__ = 'stable'
+__Requires__ = 'Freecad >= 0.19'
+__Communication__ = ''
+__Files__ = ''
+
+# import ptvsd
+# print("Waiting for debugger attach")
+# # 5678 is the default attach port in the VS Code debug configurations
+# ptvsd.enable_attach(address=('localhost', 5678), redirect_output=True)
+# #ptvsd.wait_for_attach()
+# ptvsd.break_into_debugger()
+
+from PySide.QtGui import QMessageBox, QFileDialog
+
+import FreeCAD as App
+import FreeCADGui as Gui
+import csv
+
+propertyTypes =[
+    "Acceleration",
+    "Angle",
+    "Area",
+    "Bool",
+    "Color",
+    "Direction",
+    "Distance",
+    "File",
+    "FileIncluded",
+    "Float",
+    "FloatConstraint",
+    "FloatList",
+    "Font",
+    "Force",
+    "Integer",
+    "IntegerConstraint",
+    "IntegerList",
+    "Length",
+    "Link",
+    "LinkChild",
+    "LinkGlobal",
+    "LinkList",
+    "LinkListChild",
+    "LinkListGlobal",
+    "LinkSubList",
+#    "Material",
+    "MaterialList",
+    "Matrix",
+    "Path",
+    "Percent",
+    "Placement",
+    "PlacementLink",
+    "Position",
+    "Precision",
+    "Pressure",
+    "Quantity",
+    "QuantityConstraint",
+    "Speed",
+    "String",
+    "StringList",
+    "Vector",
+    "VectorList",
+    "VectorDistance",
+    "Volume"]
+
+
+class csv2dd(object):
+    def __init__(self):
+        self.csvfile = ''
+        self.data = []
+
+    def get_csv(self):
+        self.csvfile = QFileDialog.getOpenFileName(None, 'Open csv file', '.',
+        'csv file(*.csv)')
+    
+    def read_csv(self):
+        with open(self.csvfile[0], newline='', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            line_count = 0
+            for row in reader:
+                if line_count == 0:
+                    # Column titles
+                    line_count += 1
+                    continue
+                else:
+                    dd_exists = False
+                    for dd in self.data:
+                        if dd['name'] == row[0]:
+                            dd_exists = True
+                            dd['variables'].append({         
+                            'name':row[3],
+                            'variableType':row[1],
+                            'group':row[2],
+                            'value':row[4],
+                            'comment':row[5]
+                            })
+                    if not dd_exists:
+                        self.data.append({'name':row[0],'variables':[]})
+                        self.data[-1]['variables'].append({         
+                            'name':row[3],
+                            'variableType':row[1],
+                            'group':row[2],
+                            'value':row[4],
+                            'comment':row[5]
+                            })
+        return
+    
+    def dd2FreeCAD(self):
+        self.read_csv()
+        for dd in self.data:
+            odd = App.ActiveDocument.addObject("App::FeaturePython",dd['name'])
+            setattr(odd.ViewObject,'DisplayMode',['0'])
+            odd.touch()
+            App.ActiveDocument.recompute()
+            odd.addProperty("App::PropertyStringList","DynamicData").DynamicData=['Created with csv2dd macro']
+            odd.touch()
+            App.ActiveDocument.recompute()
+            for pp in dd['variables']:
+                if pp['variableType'] in propertyTypes:
+                    App.ActiveDocument.openTransaction("dd Add Property")
+                    op = odd.addProperty(
+                        'App::Property'+pp['variableType'],
+                        pp['name'],
+                        pp['group'],
+                        pp['comment']
+                    )
+                    opValue = getattr(odd,pp['name'])
+                    opValue.Value = pp['value']
+                    App.ActiveDocument.commitTransaction()
+                    App.ActiveDocument.recompute()
+                else:
+                    QMessageBox.critical(None, "Error",f"variable of type {pp['variableType']} not allowed!")
+        QMessageBox.information(None, "Ready","dynamicData objects and variables correctly generated!")
+        return
+
+if __name__ == '__main__':
+    oCsv2dd = csv2dd()
+    oCsv2dd.get_csv()
+    if oCsv2dd.csvfile != '':
+        oCsv2dd.dd2FreeCAD()

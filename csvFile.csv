@@ -1,0 +1,6 @@
+﻿dynamicDataName,variableType,group,variableName,value,comment
+diamTornillos,Length,diametros,M5,5,Es el diámetro de un tornillo M5
+diamTornillos,Length,diametros,M6,6,Es el diámetro de un tornillo M6
+largoTornillos,Length,longitudes,M5s,20,Longitud tornillo M5 corto
+largoTornillos,Length,longitudes,M5m,40,Longitud tornillo M5 mediano
+largoTornillos,Length,longitudes,M5l,60,Longitud tornillo M5 largo
