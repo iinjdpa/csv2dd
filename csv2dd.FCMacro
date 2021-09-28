@@ -7,8 +7,8 @@ It allows create several dynamicData objects in one click containing multiple va
 and naming the dynamicData objects different that "dd".
 '''
 __Author__ = "Daniel Pose. iinjdpa at gmail"
-__Version__ = '0.1'
-__Date__ = '2021-09-26'
+__Version__ = '0.2'
+__Date__ = '2021-09-28'
 __License__ = 'MIT'
 __Web__ = ""
 __Wiki__ = ""
@@ -18,13 +18,6 @@ __Status__ = 'stable'
 __Requires__ = 'Freecad >= 0.19'
 __Communication__ = ''
 __Files__ = ''
-
-# import ptvsd
-# print("Waiting for debugger attach")
-# # 5678 is the default attach port in the VS Code debug configurations
-# ptvsd.enable_attach(address=('localhost', 5678), redirect_output=True)
-# #ptvsd.wait_for_attach()
-# ptvsd.break_into_debugger()
 
 from PySide.QtGui import QMessageBox, QFileDialog
 
@@ -78,6 +71,11 @@ propertyTypes =[
     "VectorDistance",
     "Volume"]
 
+# Get path for FreeCAD macros
+p=App.ParamGet("User parameter:BaseApp/Preferences/Macro")
+macroPath = p.GetString("MacroPath")
+file_path = os.path.join(macroPath,'./csv2dd.txt')
+
 
 class csv2dd(object):
     def __init__(self):
@@ -85,11 +83,20 @@ class csv2dd(object):
         self.data = []
 
     def get_csv(self):
-        self.csvfile = QFileDialog.getOpenFileName(None, 'Open csv file', '.',
-        'csv file(*.csv)')
+        csv_path = ''
+        # try:
+        with open(file_path,'r') as f:
+            csv_path = f.read()
+            csv_path = csv_path.replace('\n','').strip()
+        # except:
+        #     pass
+        if os.path.exists(csv_path):
+            self.csvfile = csv_path
+        else:
+            self.csvfile = QFileDialog.getOpenFileName(None, 'Open csv file', '.','csv file(*.csv)')[0]
     
     def read_csv(self):
-        with open(self.csvfile[0], newline='', encoding='utf-8') as f:
+        with open(self.csvfile, newline='', encoding='utf-8') as f:
             reader = csv.reader(f)
             line_count = 0
             for row in reader:
@@ -122,30 +129,47 @@ class csv2dd(object):
     
     def dd2FreeCAD(self):
         self.read_csv()
+        objs = App.ActiveDocument.Objects
+        objs_list = {}
+        for obj in objs:
+            if 'FeaturePython' in obj.TypeId:
+                objs_list[obj.Label] = obj
         for dd in self.data:
-            odd = App.ActiveDocument.addObject("App::FeaturePython",dd['name'])
-            setattr(odd.ViewObject,'DisplayMode',['0'])
-            odd.touch()
-            App.ActiveDocument.recompute()
-            odd.addProperty("App::PropertyStringList","DynamicData").DynamicData=['Created with csv2dd macro']
-            odd.touch()
-            App.ActiveDocument.recompute()
+            if dd['name'] in objs_list:
+                odd = objs_list[dd['name']]
+            else:
+                odd = App.ActiveDocument.addObject("App::FeaturePython",dd['name'])
+                setattr(odd.ViewObject,'DisplayMode',['0'])
+                odd.touch()
+                App.ActiveDocument.recompute()
+                odd.addProperty("App::PropertyStringList","DynamicData").DynamicData=['Created with csv2dd macro']
+                odd.touch()
+                App.ActiveDocument.recompute()
+            pp_list = odd.PropertiesList
+            pp_list = [x for x in pp_list if x not in ['DynamicData', 'ExpressionEngine', 'Label', 'Label2', 'Proxy', 'Visibility']]
             for pp in dd['variables']:
-                if pp['variableType'] in propertyTypes:
-                    App.ActiveDocument.openTransaction("dd Add Property")
-                    op = odd.addProperty(
-                        'App::Property'+pp['variableType'],
-                        pp['name'],
-                        pp['group'],
-                        pp['comment']
-                    )
-                    opValue = getattr(odd,pp['name'])
-                    opValue.Value = pp['value']
+                if pp['name'] in pp_list:
+                    op = getattr(odd,pp['name'])
+                    App.ActiveDocument.openTransaction("modify Property")
+                    op.Value = pp['value']
                     App.ActiveDocument.commitTransaction()
                     App.ActiveDocument.recompute()
                 else:
-                    QMessageBox.critical(None, "Error",f"variable of type {pp['variableType']} not allowed!")
-        QMessageBox.information(None, "Ready","dynamicData objects and variables correctly generated!")
+                    if pp['variableType'] in propertyTypes:
+                        App.ActiveDocument.openTransaction("dd Add Property")
+                        op = odd.addProperty(
+                            'App::Property'+pp['variableType'],
+                            pp['name'],
+                            pp['group'],
+                            pp['comment']
+                        )
+                        opValue = getattr(odd,pp['name'])
+                        opValue.Value = pp['value']
+                        App.ActiveDocument.commitTransaction()
+                        App.ActiveDocument.recompute()
+                    else:
+                        QMessageBox.critical(None, "Error",f"variable of type {pp['variableType']} not allowed!")
+        QMessageBox.information(None, "Ready","dynamicData objects and variables correctly generated and updated!")
         return
 
 if __name__ == '__main__':
